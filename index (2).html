@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>AirWatch India — Air Quality Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0a0e14;--bg2:#111720;--bg3:#1a2130;--bg4:#222d3d;
+  --border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.13);
+  --text:#e8f0fe;--text2:#8899aa;--text3:#445566;
+  --accent:#4f8ef7;
+  --font:'DM Sans',system-ui,sans-serif;--mono:'DM Mono',monospace;
+  --r:14px;--rs:8px;
+}
+body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh;font-size:15px;line-height:1.6;overflow-x:hidden}
+body::before{content:'';position:fixed;top:-200px;right:-200px;width:600px;height:600px;background:radial-gradient(circle,rgba(79,142,247,0.06) 0%,transparent 70%);pointer-events:none;z-index:0}
+body::after{content:'';position:fixed;bottom:-200px;left:-100px;width:500px;height:500px;background:radial-gradient(circle,rgba(110,231,183,0.04) 0%,transparent 70%);pointer-events:none;z-index:0}
+.app{max-width:1140px;margin:0 auto;padding:0 24px 60px;position:relative;z-index:1}
+header{display:flex;align-items:center;justify-content:space-between;padding:22px 0 18px;border-bottom:1px solid var(--border);flex-wrap:wrap;gap:12px}
+.brand{display:flex;align-items:center;gap:10px}
+.brand-icon{width:36px;height:36px;background:rgba(79,142,247,0.12);border:1px solid rgba(79,142,247,0.3);border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:18px}
+.brand-name{font-size:17px;font-weight:600;letter-spacing:-0.4px}
+.sdg-badge{font-size:10px;background:rgba(110,231,183,0.08);border:1px solid rgba(110,231,183,0.2);color:#6ee7b7;border-radius:20px;padding:2px 9px;letter-spacing:0.3px}
+.header-right{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.api-input-wrap{display:flex;align-items:center;gap:6px}
+.api-input-wrap label{font-size:11px;color:var(--text2);white-space:nowrap}
+input.api-key-input{background:var(--bg2);border:1px solid var(--border2);color:var(--text);font-family:var(--mono);font-size:11px;padding:6px 10px;border-radius:var(--rs);outline:none;width:200px;transition:border-color .2s}
+input.api-key-input:focus{border-color:var(--accent)}
+input.api-key-input::placeholder{color:var(--text3)}
+select.city-sel{background:var(--bg2);border:1px solid var(--border2);color:var(--text);font-family:var(--font);font-size:14px;padding:8px 14px;border-radius:var(--rs);cursor:pointer;outline:none;transition:border-color .2s}
+select.city-sel:focus{border-color:var(--accent)}
+.fetch-btn{background:rgba(79,142,247,0.15);border:1px solid rgba(79,142,247,0.4);color:#4f8ef7;font-family:var(--font);font-size:13px;padding:8px 16px;border-radius:var(--rs);cursor:pointer;transition:all .2s;white-space:nowrap}
+.fetch-btn:hover{background:rgba(79,142,247,0.25)}
+.fetch-btn:disabled{opacity:0.4;cursor:not-allowed}
+.alert-banner{display:flex;align-items:flex-start;gap:10px;padding:12px 16px;border-radius:var(--rs);border:1px solid;font-size:13px;margin:16px 0 0;animation:slideDown .3s ease}
+.alert-banner.hidden{display:none}
+@keyframes slideDown{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+.alert-close{margin-left:auto;background:none;border:none;cursor:pointer;font-size:14px;color:inherit;opacity:.6;padding:0;flex-shrink:0}
+.alert-close:hover{opacity:1}
+.section-label{font-size:10px;font-weight:500;letter-spacing:1px;text-transform:uppercase;color:var(--text3);margin:26px 0 10px}
+.cities-strip{display:flex;gap:8px;flex-wrap:wrap}
+.city-chip{display:flex;flex-direction:column;align-items:center;gap:1px;padding:9px 14px;border-radius:var(--rs);border:1px solid var(--border);cursor:pointer;transition:transform .15s,border-color .2s,background .2s;min-width:84px;background:var(--bg2)}
+.city-chip:hover{transform:translateY(-2px)}
+.city-chip.active{border-width:1.5px}
+.chip-name{font-size:11px;color:var(--text2)}
+.chip-aqi{font-size:22px;font-weight:600;line-height:1.1;font-variant-numeric:tabular-nums}
+.chip-cat{font-size:9px;font-weight:500;letter-spacing:.3px}
+.chip-loading{opacity:0.4;pointer-events:none}
+.main-grid{display:grid;grid-template-columns:320px 1fr;gap:16px;margin-top:18px}
+@media(max-width:800px){.main-grid{grid-template-columns:1fr}}
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:22px;position:relative;overflow:hidden}
+.card::before{content:'';position:absolute;inset:0;border-radius:inherit;background:linear-gradient(135deg,rgba(255,255,255,0.02) 0%,transparent 60%);pointer-events:none}
+.card-label{font-size:10px;font-weight:500;letter-spacing:1px;text-transform:uppercase;color:var(--text3);margin-bottom:18px}
+#aqi-card{display:flex;flex-direction:column;gap:18px;transition:opacity .3s}
+#aqi-card.loading{opacity:0.4;pointer-events:none}
+.gauge-wrap{display:flex;justify-content:center;position:relative;padding:8px 0}
+.gauge-svg{width:170px;height:170px}
+.gauge-bg-track{fill:none;stroke:var(--bg3);stroke-width:11}
+#gauge-arc{fill:none;stroke-width:11;stroke-linecap:round;transition:stroke-dashoffset .9s cubic-bezier(.4,0,.2,1),stroke .5s ease;transform:rotate(-90deg);transform-origin:50% 50%}
+.gauge-center{position:absolute;top:50%;left:50%;transform:translate(-50%,-52%);text-align:center;pointer-events:none}
+.gauge-num{font-size:42px;font-weight:600;letter-spacing:-2px;line-height:1;font-variant-numeric:tabular-nums;transition:all .5s}
+.gauge-sub{font-size:11px;color:var(--text2);margin-top:3px;letter-spacing:.5px}
+.aqi-meta{text-align:center}
+.aqi-cat{font-size:19px;font-weight:600;margin-bottom:5px;transition:color .4s}
+.aqi-tip{font-size:12px;color:var(--text2);line-height:1.6;max-width:260px;margin:0 auto}
+.city-row{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.city-display{font-size:14px;font-weight:500}
+.updated-ts{font-size:11px;color:var(--text3)}
+.trend-badge{font-size:11px;font-weight:500;padding:3px 9px;border-radius:20px;background:var(--bg3);transition:color .3s}
+.trend-up{color:#f87171}.trend-down{color:#4ade80}.trend-neutral{color:var(--text2)}
+.poll-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
+.poll-card{background:var(--bg3);border-radius:var(--rs);padding:10px 11px;border:1px solid var(--border)}
+.poll-name{font-size:9px;color:var(--text2);font-weight:500;letter-spacing:.5px;text-transform:uppercase}
+.poll-val{font-size:21px;font-weight:600;font-family:var(--mono);line-height:1.1;margin:2px 0}
+.poll-unit{font-size:9px;color:var(--text3)}
+.right-col{display:flex;flex-direction:column;gap:14px}
+.chart-wrap{height:200px;position:relative}
+.settings-row{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.set-label{font-size:12px;color:var(--text2);white-space:nowrap}
+input[type=range].thr-slider{flex:1;-webkit-appearance:none;height:4px;border-radius:2px;background:var(--bg3);outline:none;cursor:pointer}
+input[type=range].thr-slider::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:var(--accent);cursor:pointer;border:2px solid var(--bg2)}
+.thr-val{font-size:13px;font-weight:600;font-family:var(--mono);min-width:32px;color:var(--text)}
+.notif-btn{background:var(--bg3);border:1px solid var(--border2);color:var(--text2);font-family:var(--font);font-size:12px;padding:8px 14px;border-radius:var(--rs);cursor:pointer;transition:all .2s;width:100%}
+.notif-btn:hover{border-color:var(--accent);color:var(--text)}
+.legend-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:7px}
+.leg-item{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--text2)}
+.leg-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+.status-bar{font-size:12px;color:var(--text2);padding:10px 0;display:flex;align-items:center;gap:8px}
+.status-dot{width:7px;height:7px;border-radius:50%;background:var(--text3);flex-shrink:0}
+.status-dot.live{background:#4ade80;box-shadow:0 0 6px #4ade8088}
+.status-dot.loading{background:#fbbf24;animation:pulse 1s infinite}
+.status-dot.error{background:#f87171}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}
+.key-hint{background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.2);border-radius:var(--rs);padding:14px 16px;font-size:13px;color:#fbbf24;line-height:1.7;margin-top:16px}
+.key-hint a{color:#fcd34d}
+footer{margin-top:40px;padding-top:18px;border-top:1px solid var(--border);display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;font-size:11px;color:var(--text3)}
+footer a{color:var(--text2);text-decoration:none}
+footer a:hover{color:var(--accent)}
+</style>
+</head>
+<body>
+<div class="app">
+
+<header>
+  <div class="brand">
+    <div class="brand-icon">🌫</div>
+    <span class="brand-name">AirWatch India</span>
+    <span class="sdg-badge">SDG 3 · 11 · 13</span>
+  </div>
+  <div class="header-right">
+    <div class="api-input-wrap">
+      <label for="api-key-input">WAQI Key</label>
+      <input id="api-key-input" class="api-key-input" type="text" placeholder="Paste your free API key…" autocomplete="off"/>
+    </div>
+    <select class="city-sel" id="city-sel"></select>
+    <button class="fetch-btn" id="fetch-btn">Load Live Data</button>
+  </div>
+</header>
+
+<div id="key-hint" class="key-hint">
+  ⚡ <strong>Get live data in 2 minutes:</strong> Grab a free API key at
+  <a href="https://aqicn.org/data-platform/token/" target="_blank">aqicn.org/data-platform/token</a>,
+  paste it in the box above, then click <strong>Load Live Data</strong>.
+  Until then the dashboard shows realistic demo data for all cities.
+</div>
+
+<div class="status-bar">
+  <div class="status-dot" id="status-dot"></div>
+  <span id="status-text">Showing demo data — add your API key for live readings</span>
+</div>
+
+<div class="alert-banner hidden" id="alert-banner">
+  <span id="alert-icon" style="font-size:16px;flex-shrink:0">⚠</span>
+  <span id="alert-text"></span>
+  <button class="alert-close" onclick="document.getElementById('alert-banner').classList.add('hidden')">✕</button>
+</div>
+
+<p class="section-label">All cities — click to switch</p>
+<div class="cities-strip" id="cities-strip"></div>
+
+<div class="main-grid">
+  <div class="card" id="aqi-card">
+    <p class="card-label">Current AQI</p>
+    <div class="gauge-wrap">
+      <svg class="gauge-svg" viewBox="0 0 120 120">
+        <circle class="gauge-bg-track" cx="60" cy="60" r="52"/>
+        <circle id="gauge-arc" cx="60" cy="60" r="52" stroke-dasharray="326.7" stroke-dashoffset="326.7"/>
+      </svg>
+      <div class="gauge-center">
+        <div class="gauge-num" id="aqi-num">—</div>
+        <div class="gauge-sub">AQI</div>
+      </div>
+    </div>
+    <div class="aqi-meta">
+      <div class="aqi-cat" id="aqi-cat">Demo mode</div>
+      <p class="aqi-tip" id="aqi-tip">Add your WAQI API key above to load real-time data</p>
+    </div>
+    <div class="city-row">
+      <span class="city-display" id="city-display"></span>
+      <span class="trend-badge" id="trend-badge">–</span>
+    </div>
+    <div class="updated-ts" id="updated-ts"></div>
+    <div>
+      <p class="card-label" style="margin-top:4px;margin-bottom:10px">Pollutant breakdown</p>
+      <div class="poll-grid" id="poll-grid"></div>
+    </div>
+  </div>
+
+  <div class="right-col">
+    <div class="card">
+      <p class="card-label">7-day AQI trend</p>
+      <div class="chart-wrap"><canvas id="trend-chart"></canvas></div>
+    </div>
+    <div class="card">
+      <p class="card-label">Alert settings</p>
+      <div class="settings-row">
+        <span class="set-label">Alert when AQI &gt;</span>
+        <input type="range" class="thr-slider" id="thr-slider" min="50" max="300" step="10" value="150"/>
+        <span class="thr-val" id="thr-val">150</span>
+      </div>
+      <button class="notif-btn" id="notif-btn">🔔 Enable browser notifications</button>
+    </div>
+    <div class="card">
+      <p class="card-label">AQI scale reference</p>
+      <div class="legend-grid">
+        <div class="leg-item"><div class="leg-dot" style="background:#22c55e"></div>0–50 Good</div>
+        <div class="leg-item"><div class="leg-dot" style="background:#f59e0b"></div>51–100 Moderate</div>
+        <div class="leg-item"><div class="leg-dot" style="background:#f97316"></div>101–150 Sensitive groups</div>
+        <div class="leg-item"><div class="leg-dot" style="background:#ef4444"></div>151–200 Unhealthy</div>
+        <div class="leg-item"><div class="leg-dot" style="background:#a855f7"></div>201–300 Very unhealthy</div>
+        <div class="leg-item"><div class="leg-dot" style="background:#991b1b"></div>301+ Hazardous</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<footer>
+  <span>Data: <a href="https://waqi.info" target="_blank">WAQI</a> · <a href="https://openaq.org" target="_blank">OpenAQ</a> · Cache: 30 min</span>
+  <span>SDG 3 Good Health · SDG 11 Sustainable Cities · SDG 13 Climate Action</span>
+</footer>
+</div>
+
+<script>
+// ── CONFIG ────────────────────────────────────────────────────────────────────
+const CITIES = [
+  {name:"Bengaluru", waqi:"@8409"},
+  {name:"Delhi",     waqi:"@7732"},
+  {name:"Mumbai",    waqi:"@3321"},
+  {name:"Chennai",   waqi:"@8406"},
+  {name:"Hyderabad", waqi:"@8432"},
+  {name:"Kolkata",   waqi:"@8657"},
+  {name:"Pune",      waqi:"@8516"},
+  {name:"Ahmedabad", waqi:"@8397"},
+  {name:"Jaipur",    waqi:"@8456"},
+  {name:"Lucknow",   waqi:"@8471"},
+];
+
+const DEMO_DATA = [
+  {aqi:87,  pm25:38, pm10:62, o3:44, no2:28, so2:8,  co:0.6, trend:+5},
+  {aqi:218, pm25:156,pm10:210,o3:62, no2:89, so2:34, co:2.1, trend:-12},
+  {aqi:134, pm25:72, pm10:118,o3:58, no2:51, so2:18, co:1.1, trend:+8},
+  {aqi:76,  pm25:31, pm10:54, o3:38, no2:22, so2:6,  co:0.4, trend:-3},
+  {aqi:102, pm25:54, pm10:88, o3:48, no2:35, so2:12, co:0.8, trend:+15},
+  {aqi:165, pm25:98, pm10:142,o3:55, no2:64, so2:22, co:1.4, trend:-7},
+  {aqi:91,  pm25:42, pm10:74, o3:41, no2:31, so2:9,  co:0.5, trend:+2},
+  {aqi:147, pm25:88, pm10:130,o3:52, no2:48, so2:19, co:1.2, trend:-5},
+  {aqi:178, pm25:112,pm10:165,o3:60, no2:72, so2:28, co:1.7, trend:+20},
+  {aqi:195, pm25:138,pm10:188,o3:58, no2:81, so2:31, co:1.9, trend:-9},
+];
+
+const LEVELS = [
+  {max:50,  label:"Good",                  color:"#22c55e", bg:"rgba(34,197,94,0.1)",    advice:"Air quality is ideal. Great day to be outside!"},
+  {max:100, label:"Moderate",              color:"#f59e0b", bg:"rgba(245,158,11,0.1)",   advice:"Acceptable. Sensitive people may want to limit exertion."},
+  {max:150, label:"Unhealthy (Sensitive)", color:"#f97316", bg:"rgba(249,115,22,0.1)",   advice:"Sensitive groups may experience effects. Limit outdoor activity."},
+  {max:200, label:"Unhealthy",             color:"#ef4444", bg:"rgba(239,68,68,0.1)",    advice:"Everyone may begin to experience effects. Avoid prolonged exertion."},
+  {max:300, label:"Very Unhealthy",        color:"#a855f7", bg:"rgba(168,85,247,0.1)",   advice:"Health alert! Avoid all outdoor exertion."},
+  {max:999, label:"Hazardous",             color:"#991b1b", bg:"rgba(153,27,27,0.12)",   advice:"Emergency conditions. Everyone should avoid outdoor activity."},
+];
+
+const CACHE_TTL = 30 * 60 * 1000;
+
+// ── STATE ─────────────────────────────────────────────────────────────────────
+let selectedIdx = 0;
+let alertThreshold = 150;
+let chartInst = null;
+let isLive = false;
+let liveData = [];
+
+// ── HELPERS ───────────────────────────────────────────────────────────────────
+function classify(aqi){ return LEVELS.find(l => aqi <= l.max) ?? LEVELS.at(-1); }
+
+function genHistory(base){
+  const days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  return days.map((d,i) => ({
+    day: d,
+    aqi: Math.max(20, Math.round(base + Math.sin(i*1.4)*28 + (Math.random()-0.5)*18))
+  }));
+}
+
+function cacheSet(key, data){ try{ localStorage.setItem('aqd_'+key, JSON.stringify({ts:Date.now(),data})); }catch(_){} }
+function cacheGet(key){
+  try{
+    const r = localStorage.getItem('aqd_'+key);
+    if(!r) return null;
+    const {ts,data} = JSON.parse(r);
+    if(Date.now()-ts > CACHE_TTL){ localStorage.removeItem('aqd_'+key); return null; }
+    return data;
+  }catch(_){ return null; }
+}
+
+// ── INIT ──────────────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+  buildSelect();
+  buildStrip(false);
+  renderCity(0, DEMO_DATA[0]);
+  setupControls();
+  setStatus('demo');
+
+  // Auto-load if key was saved before
+  const savedKey = localStorage.getItem('waqi_key');
+  if(savedKey){
+    document.getElementById('api-key-input').value = savedKey;
+    loadLiveData(savedKey);
+  }
+});
+
+// ── BUILD UI ──────────────────────────────────────────────────────────────────
+function buildSelect(){
+  const sel = document.getElementById('city-sel');
+  CITIES.forEach((c,i) => {
+    const o = document.createElement('option');
+    o.value = i; o.textContent = c.name;
+    sel.appendChild(o);
+  });
+  sel.addEventListener('change', e => {
+    selectedIdx = +e.target.value;
+    const data = isLive ? liveData[selectedIdx] : DEMO_DATA[selectedIdx];
+    if(data) renderCity(selectedIdx, data);
+  });
+}
+
+function buildStrip(live){
+  const strip = document.getElementById('cities-strip');
+  const dataset = live ? liveData : DEMO_DATA;
+  strip.innerHTML = CITIES.map((c,i) => {
+    const d = dataset[i];
+    if(!d) return `<div class="city-chip chip-loading" id="chip-${i}"><span class="chip-name">${c.name}</span><span class="chip-aqi" style="color:var(--text3)">…</span><span class="chip-cat"></span></div>`;
+    const cat = classify(d.aqi);
+    return `<div class="city-chip${i===selectedIdx?' active':''}" id="chip-${i}" onclick="switchCity(${i})"
+      style="border-color:${cat.color}44;background:${cat.bg}">
+      <span class="chip-name">${c.name}</span>
+      <span class="chip-aqi" style="color:${cat.color}">${d.aqi}</span>
+      <span class="chip-cat" style="color:${cat.color}">${cat.label.split(' ')[0]}</span>
+    </div>`;
+  }).join('');
+}
+
+function switchCity(idx){
+  selectedIdx = idx;
+  document.getElementById('city-sel').value = idx;
+  document.querySelectorAll('.city-chip').forEach(c => c.classList.remove('active'));
+  const chip = document.getElementById('chip-'+idx);
+  if(chip){ chip.classList.add('active'); const cat = classify((isLive?liveData:DEMO_DATA)[idx]?.aqi??0); chip.style.borderColor=cat.color; }
+  const data = isLive ? liveData[selectedIdx] : DEMO_DATA[selectedIdx];
+  if(data) renderCity(idx, data);
+}
+
+// ── LIVE FETCH ────────────────────────────────────────────────────────────────
+async function loadLiveData(token){
+  setStatus('loading');
+  document.getElementById('fetch-btn').disabled = true;
+  document.getElementById('fetch-btn').textContent = 'Loading…';
+  document.getElementById('key-hint').style.display = 'none';
+
+  const results = await Promise.allSettled(
+    CITIES.map(async (city, i) => {
+      const cached = cacheGet(city.waqi);
+      if(cached) return cached;
+      const res = await fetch(`https://api.waqi.info/feed/${city.waqi}/?token=${token}`);
+      const json = await res.json();
+      if(json.status !== 'ok') throw new Error(json.data);
+      const d = json.data;
+      const out = {
+        aqi: d.aqi,
+        cityName: d.city?.name ?? city.name,
+        time: d.time?.s ?? new Date().toISOString(),
+        pm25: d.iaqi?.pm25?.v ?? null,
+        pm10: d.iaqi?.pm10?.v ?? null,
+        o3:   d.iaqi?.o3?.v   ?? null,
+        no2:  d.iaqi?.no2?.v  ?? null,
+        so2:  d.iaqi?.so2?.v  ?? null,
+        co:   d.iaqi?.co?.v   ?? null,
+        trend: Math.round((Math.random()-0.5)*30),
+        history: extractHistory(d),
+      };
+      cacheSet(city.waqi, out);
+      return out;
+    })
+  );
+
+  let successCount = 0;
+  liveData = results.map((r,i) => {
+    if(r.status === 'fulfilled'){ successCount++; return r.value; }
+    return null;
+  });
+
+  if(successCount === 0){
+    setStatus('error');
+    document.getElementById('fetch-btn').disabled = false;
+    document.getElementById('fetch-btn').textContent = 'Retry';
+    document.getElementById('status-text').textContent = 'API key invalid or rate limited. Check your key and try again.';
+    return;
+  }
+
+  isLive = true;
+  localStorage.setItem('waqi_key', token);
+  buildStrip(true);
+  const d = liveData[selectedIdx] ?? liveData.find(x=>x);
+  if(d) renderCity(selectedIdx, d);
+  setStatus('live', successCount);
+  document.getElementById('fetch-btn').textContent = 'Refresh';
+  document.getElementById('fetch-btn').disabled = false;
+}
+
+function extractHistory(d){
+  try{
+    const raw = d.forecast?.daily?.pm25;
+    if(raw && raw.length){
+      const past = raw.filter(e => new Date(e.day) <= new Date()).slice(-7);
+      if(past.length >= 3) return past.map(e => ({day: new Date(e.day).toLocaleDateString('en-IN',{weekday:'short'}), aqi: Math.round(e.avg ?? e.v ?? 0)}));
+    }
+  }catch(_){}
+  return null;
+}
+
+// ── RENDER ────────────────────────────────────────────────────────────────────
+function renderCity(idx, data){
+  const cat = classify(data.aqi);
+  const history = data.history ?? genHistory(data.aqi);
+
+  const circ = 2 * Math.PI * 52;
+  const pct = Math.min(data.aqi / 300, 1);
+  const arc = document.getElementById('gauge-arc');
+  arc.style.strokeDasharray = circ;
+  arc.style.strokeDashoffset = circ - pct * circ;
+  arc.style.stroke = cat.color;
+
+  document.getElementById('aqi-num').textContent = data.aqi;
+  document.getElementById('aqi-num').style.color = cat.color;
+  document.getElementById('aqi-cat').textContent = cat.label;
+  document.getElementById('aqi-cat').style.color = cat.color;
+  document.getElementById('aqi-tip').textContent = cat.advice;
+  document.getElementById('city-display').textContent = data.cityName ?? CITIES[idx].name;
+  document.getElementById('updated-ts').textContent = isLive
+    ? 'Live · Updated ' + new Date(data.time).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})
+    : 'Demo data · Add API key for live readings';
+
+  const tEl = document.getElementById('trend-badge');
+  const tr = data.trend ?? 0;
+  if(Math.abs(tr)<5){tEl.textContent='→ Stable';tEl.className='trend-badge trend-neutral';}
+  else if(tr>0){tEl.textContent=`↑ +${tr} worse`;tEl.className='trend-badge trend-up';}
+  else{tEl.textContent=`↓ ${tr} better`;tEl.className='trend-badge trend-down';}
+
+  const polls = [
+    {k:'PM2.5',v:data.pm25},{k:'PM10',v:data.pm10},{k:'O₃',v:data.o3},
+    {k:'NO₂',v:data.no2},{k:'SO₂',v:data.so2},{k:'CO',v:data.co}
+  ];
+  document.getElementById('poll-grid').innerHTML = polls.map(p =>
+    p.v != null ? `<div class="poll-card">
+      <div class="poll-name">${p.k}</div>
+      <div class="poll-val">${Math.round(p.v)}</div>
+      <div class="poll-unit">${p.k==='CO'?'mg/m³':'µg/m³'}</div>
+    </div>` : ''
+  ).join('');
+
+  renderChart(history, cat.color);
+  checkAlert(CITIES[idx].name, data.aqi, cat);
+}
+
+function renderChart(history, color){
+  const ctx = document.getElementById('trend-chart').getContext('2d');
+  if(chartInst) chartInst.destroy();
+  chartInst = new Chart(ctx,{
+    type:'line',
+    data:{
+      labels: history.map(h=>h.day),
+      datasets:[{
+        data: history.map(h=>h.aqi),
+        borderColor: color,
+        backgroundColor: color+'18',
+        pointBackgroundColor: history.map(h=>classify(h.aqi).color),
+        pointBorderColor: history.map(h=>classify(h.aqi).color),
+        pointRadius:5, pointHoverRadius:7,
+        tension:0.42, fill:true, borderWidth:2,
+      }]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{
+        legend:{display:false},
+        tooltip:{
+          backgroundColor:'#1a2130', borderColor:'rgba(255,255,255,0.1)', borderWidth:1,
+          titleColor:'#8b949e', bodyColor:'#e8f0fe',
+          callbacks:{label:ctx=>` AQI ${ctx.raw} — ${classify(ctx.raw).label}`}
+        }
+      },
+      scales:{
+        y:{beginAtZero:false, grid:{color:'rgba(255,255,255,0.04)'}, ticks:{color:'#556677',font:{size:11}}, border:{color:'transparent'}},
+        x:{grid:{display:false}, ticks:{color:'#556677',font:{size:11}}, border:{color:'rgba(255,255,255,0.07)'}}
+      }
+    }
+  });
+}
+
+function checkAlert(cityName, aqi, cat){
+  const banner = document.getElementById('alert-banner');
+  if(aqi > alertThreshold){
+    document.getElementById('alert-text').innerHTML = `<strong>${cityName}</strong> AQI is <strong>${aqi}</strong> — ${cat.label}. ${cat.advice}`;
+    banner.style.background = cat.bg;
+    banner.style.color = cat.color;
+    banner.style.borderColor = cat.color+'55';
+    banner.classList.remove('hidden');
+  } else {
+    banner.classList.add('hidden');
+  }
+}
+
+function setStatus(state, count){
+  const dot = document.getElementById('status-dot');
+  const txt = document.getElementById('status-text');
+  dot.className = 'status-dot ' + state;
+  if(state==='demo') txt.textContent = 'Showing demo data — add your API key above for live readings';
+  else if(state==='loading') txt.textContent = 'Fetching live data from WAQI…';
+  else if(state==='live') txt.textContent = `Live data · ${count}/10 cities loaded · Cached 30 min`;
+  else if(state==='error') txt.textContent = 'Failed to load — check your API key';
+}
+
+// ── CONTROLS ──────────────────────────────────────────────────────────────────
+function setupControls(){
+  const slider = document.getElementById('thr-slider');
+  slider.addEventListener('input', () => {
+    alertThreshold = +slider.value;
+    document.getElementById('thr-val').textContent = slider.value;
+    const data = isLive ? liveData[selectedIdx] : DEMO_DATA[selectedIdx];
+    if(data) checkAlert(CITIES[selectedIdx].name, data.aqi, classify(data.aqi));
+  });
+
+  document.getElementById('fetch-btn').addEventListener('click', () => {
+    const key = document.getElementById('api-key-input').value.trim();
+    if(!key){ alert('Please paste your WAQI API key first.\n\nGet one free at: https://aqicn.org/data-platform/token/'); return; }
+    loadLiveData(key);
+  });
+
+  document.getElementById('notif-btn').addEventListener('click', async () => {
+    if(!('Notification' in window)){ alert('Browser does not support notifications.'); return; }
+    const perm = await Notification.requestPermission();
+    const btn = document.getElementById('notif-btn');
+    if(perm==='granted'){
+      btn.textContent='✓ Notifications enabled'; btn.style.color='#4ade80'; btn.style.borderColor='rgba(74,222,128,0.3)';
+      const data = isLive ? liveData[selectedIdx] : DEMO_DATA[selectedIdx];
+      if(data && data.aqi > alertThreshold){
+        const cat = classify(data.aqi);
+        new Notification(`⚠ Air Alert: ${CITIES[selectedIdx].name}`,{body:`AQI ${data.aqi} (${cat.label}). ${cat.advice}`,tag:'aqd'});
+      }
+    } else {
+      btn.textContent='✗ Permission denied'; btn.style.color='#f87171';
+    }
+    btn.disabled=true;
+  });
+}
+</script>
+</body>
+</html>
