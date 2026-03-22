@@ -1,4 +1,6 @@
+
 # 🌫️ AirWatch India
+<img width="1661" height="1033" alt="Screenshot 2026-03-22 140551" src="https://github.com/user-attachments/assets/50fab51a-60a6-42e4-8700-74d33351465f" />
 
 > A real-time air quality monitoring dashboard for 10 major Indian cities — built as part of a 12-project weekend challenge aligned with the UN Sustainable Development Goals.
 
